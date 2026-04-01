@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Time Collector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --text: rgba(255, 248, 241, 0.98);
+      --muted: rgba(255, 248, 241, 0.72);
+      --accent: #ffd9b7;
+      --ui-accent-glow: rgba(255, 217, 183, 0.22);
+      --card-blur: 14px;
+      --card-opacity: 0.42;
+      --frame-width: min(92vw, 560px, calc(92vh * 0.671));
+      --frame-pad-x: clamp(20px, 4vw, 56px);
+      --content-width: min(calc(var(--frame-width) - (var(--frame-pad-x) * 2)), 468px);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(10, 12, 16, 0.12), rgba(10, 12, 16, 0.44)),
+        url("https://images.unsplash.com/photo-1752784153859-4cdd1a474404?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=80&w=3000")
+        center center / cover no-repeat fixed;
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .frame,
+    .frame * {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .frame[data-ui-theme="dark"] {
+      --ui-panel-border: rgba(255, 248, 241, 0.14);
+      --ui-group-bg: rgba(255, 255, 255, 0.04);
+      --ui-group-border: rgba(255, 248, 241, 0.1);
+      --ui-control-bg: rgba(12, 12, 14, 0.28);
+      --ui-control-border: rgba(255, 248, 241, 0.14);
+      --ui-text: rgba(255, 248, 241, 0.98);
+      --ui-muted: rgba(255, 248, 241, 0.72);
+      --ui-accent: #ffd9b7;
+      --ui-active-bg: rgba(255, 217, 183, 0.12);
+      --ui-accent-border: rgba(255, 217, 183, 0.34);
+      --ui-slider-track: rgba(255, 248, 241, 0.16);
+      --ui-slider-thumb: rgba(255, 248, 241, 0.92);
+    }
+
+    .frame[data-ui-theme="light"] {
+      --ui-panel-border: rgba(28, 28, 32, 0.08);
+      --ui-group-bg: rgba(255, 255, 255, 0.48);
+      --ui-group-border: rgba(28, 28, 32, 0.08);
+      --ui-control-bg: rgba(255, 255, 255, 0.56);
+      --ui-control-border: rgba(28, 28, 32, 0.08);
+      --ui-text: rgba(24, 24, 28, 0.94);
+      --ui-muted: rgba(24, 24, 28, 0.64);
+      --ui-accent: rgba(24, 24, 28, 0.96);
+      --ui-active-bg: rgba(24, 24, 28, 0.08);
+      --ui-accent-border: rgba(24, 24, 28, 0.22);
+      --ui-slider-track: rgba(24, 24, 28, 0.18);
+      --ui-slider-thumb: rgba(24, 24, 28, 0.92);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        place-items: start center;
+        padding-top: max(10px, env(safe-area-inset-top));
+      }
+
+      .frame {
+        padding-top: calc(14px + env(safe-area-inset-top));
+      }
+
+      .ui {
+        gap: 10px;
+      }
+    }
+
+    .frame {
+      position: relative;
+      width: var(--frame-width);
+      height: auto;
+      aspect-ratio: 0.671;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding:
+        calc(24px + env(safe-area-inset-top))
+        var(--frame-pad-x)
+        calc(24px + env(safe-area-inset-bottom))
+        var(--frame-pad-x);
+    }
+
+    @media (min-width: 900px) {
+      :root {
+        --frame-pad-x: 24px;
+      }
+
+      .frame {
+        padding: 24px;
+      }
+    }
+
+    .ui {
+      width: var(--content-width);
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title {
+      display: grid;
+      gap: 8px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: clamp(0.62rem, 0.9vw, 0.82rem);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      font-weight: 600;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.34);
+    }
+
+    .settings {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .settings-toggle {
+      appearance: none;
+      border: 1px solid var(--ui-control-border);
+      background: var(--ui-control-bg);
+      color: var(--ui-text);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 0.72rem;
+      line-height: 1;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .settings-panel {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: var(--content-width);
+      height: min(92vh, 720px);
+      transform: translate(-50%, -50%);
+      padding: 12px;
+      border-radius: 24px;
+      border: 1px solid var(--ui-panel-border);
+      background: rgba(var(--settings-panel-surface), var(--card-opacity));
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(var(--card-blur));
+      -webkit-backdrop-filter: blur(var(--card-blur));
+      display: none;
+      z-index: 20;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+      color: var(--ui-text);
+      overflow: auto;
+    }
+
+    .frame[data-ui-theme="dark"] .settings-panel {
+      --settings-panel-surface: 12, 12, 14;
+      --settings-section-bg: rgba(255, 255, 255, 0.04);
+      --settings-section-border: rgba(255, 248, 241, 0.1);
+      --settings-control-bg: rgba(12, 12, 14, 0.28);
+      --settings-control-border: rgba(255, 248, 241, 0.14);
+    }
+
+    .frame[data-ui-theme="light"] .settings-panel {
+      --settings-panel-surface: 255, 247, 241;
+      --settings-section-bg: rgba(255, 255, 255, 0.48);
+      --settings-section-border: rgba(28, 28, 32, 0.08);
+      --settings-control-bg: rgba(255, 255, 255, 0.56);
+      --settings-control-border: rgba(28, 28, 32, 0.08);
+    }
+
+    .settings.open .settings-panel {
+      display: grid;
+    }
+
+    .settings-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .settings-close {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 999px;
+      padding: 6px 9px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .settings-sections {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .settings-group {
+      padding: 11px;
+      border-radius: 16px;
+      border: 1px solid var(--settings-section-border);
+      background: var(--settings-section-bg);
+    }
+
+    .settings-label {
+      margin: 0 0 10px;
+      color: var(--ui-muted);
+      font-size: 0.62rem;
+      letter-spacing: 0.02em;
+    }
+
+    .lang-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .theme-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .lang-btn {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 8px 8px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .lang-btn.active {
+      border-color: var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+    }
+
+    .theme-btn {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 8px 8px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .theme-btn.active {
+      border-color: var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+    }
+
+    .accent-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .accent-btn {
+      appearance: none;
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 8px 8px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .accent-btn::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--accent-swatch);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24);
+      flex: 0 0 auto;
+    }
+
+    .accent-btn.active {
+      border-color: var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+    }
+
+    .slider-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+
+    .slider-value {
+      color: var(--ui-muted);
+      font-size: 0.62rem;
+      white-space: nowrap;
+    }
+
+    .slider {
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--ui-slider-track);
+      outline: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-slider-thumb);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-slider-thumb);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .time-block {
+      width: 100%;
+      display: grid;
+      gap: 10px;
+      padding-top: 2px;
+    }
+
+    .time-card {
+      width: 100%;
+      display: grid;
+      gap: 8px;
+      padding: 12px 12px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      background: rgba(var(--card-surface), var(--card-opacity));
+      backdrop-filter: blur(var(--card-blur));
+      -webkit-backdrop-filter: blur(var(--card-blur));
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+    }
+
+    .time-card[data-theme="dark"] {
+      --card-surface: 12, 12, 14;
+      --card-border: rgba(255, 248, 241, 0.12);
+      --card-label: rgba(255, 248, 241, 0.72);
+      --card-accent: #ffd9b7;
+    }
+
+    .time-card[data-theme="light"] {
+      --card-surface: 255, 247, 241;
+      --card-border: rgba(255, 255, 255, 0.34);
+      --card-label: rgba(20, 20, 24, 0.66);
+      --card-accent: rgba(24, 24, 28, 0.96);
+    }
+
+    .label {
+      margin: 0;
+      font-size: clamp(0.68rem, 1.0vw, 0.84rem);
+      line-height: 1.35;
+      color: var(--card-label);
+      letter-spacing: -0.02em;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .time {
+      margin: 0;
+      font-size: clamp(1.15rem, 2.4vw, 1.65rem);
+      line-height: 0.92;
+      font-weight: 800;
+      letter-spacing: -0.06em;
+      color: var(--ui-accent);
+      text-shadow: 0 0 24px var(--ui-accent-glow), 0 2px 18px rgba(0, 0, 0, 0.18);
+      word-break: break-all;
+    }
+
+    .rate {
+      margin: 0;
+      font-size: clamp(0.7rem, 1.0vw, 0.82rem);
+      line-height: 1.35;
+      color: var(--card-label);
+      letter-spacing: -0.02em;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <main class="frame" aria-label="Time Collector game" data-ui-theme="dark">
+    <section class="ui" aria-live="polite">
+      <div class="topbar">
+        <div class="title">
+          <h1 id="gameTitle">Time Collector</h1>
+        </div>
+
+        <div class="settings" id="settingsRoot">
+          <button class="settings-toggle" id="settingsToggle" type="button" aria-expanded="false" aria-controls="settingsPanel">
+            Settings
+          </button>
+          <div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+            <div class="settings-head">
+              <p class="settings-title" id="settingsTitle">Settings</p>
+              <button class="settings-close" id="settingsClose" type="button">Close</button>
+            </div>
+            <div class="settings-sections">
+              <div class="settings-group">
+                <p class="settings-label" id="languageLabel">Language</p>
+                <div class="lang-row">
+                  <button class="lang-btn" id="langKo" type="button">Korean</button>
+                  <button class="lang-btn" id="langEn" type="button">English</button>
+                </div>
+              </div>
+              <div class="settings-group">
+                <p class="settings-label" id="themeLabel">Card Theme</p>
+                <div class="theme-row">
+                  <button class="theme-btn" id="themeDark" type="button">Dark</button>
+                  <button class="theme-btn" id="themeLight" type="button">Light</button>
+                </div>
+              </div>
+              <div class="settings-group">
+                <p class="settings-label" id="accentLabel">Accent Color</p>
+                <div class="accent-row">
+                  <button class="accent-btn" id="accentBlue" type="button" data-accent="blue" style="--accent-swatch: #5b9dff;">Blue</button>
+                  <button class="accent-btn" id="accentGreen" type="button" data-accent="green" style="--accent-swatch: #55d38a;">Green</button>
+                  <button class="accent-btn" id="accentYellow" type="button" data-accent="yellow" style="--accent-swatch: #ffd65a;">Yellow</button>
+                  <button class="accent-btn" id="accentPurple" type="button" data-accent="purple" style="--accent-swatch: #c48cff;">Purple</button>
+                  <button class="accent-btn" id="accentRed" type="button" data-accent="red" style="--accent-swatch: #ff7c86;">Red</button>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="slider-row">
+                  <div class="slider-head">
+                    <p class="settings-label" id="blurLabel">Blur</p>
+                    <span class="slider-value" id="blurValue">14px</span>
+                  </div>
+                  <input class="slider" id="blurRange" type="range" min="0" max="28" step="1" />
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="slider-row">
+                  <div class="slider-head">
+                    <p class="settings-label" id="opacityLabel">Opacity</p>
+                    <span class="slider-value" id="opacityValue">42%</span>
+                  </div>
+                  <input class="slider" id="opacityRange" type="range" min="15" max="75" step="1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="time-block">
+        <div class="time-card" id="timeCard" data-theme="dark">
+          <p class="label" id="timeLabel">Current time</p>
+          <p class="time" id="timeValue">0</p>
+          <p class="rate" id="rateLabel">+1 time / sec</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const frame = document.querySelector(".frame");
+    const gameTitle = document.getElementById("gameTitle");
+    const timeValue = document.getElementById("timeValue");
+    const timeLabel = document.getElementById("timeLabel");
+    const rateLabel = document.getElementById("rateLabel");
+    const timeCard = document.getElementById("timeCard");
+    const languageLabel = document.getElementById("languageLabel");
+    const themeLabel = document.getElementById("themeLabel");
+    const accentLabel = document.getElementById("accentLabel");
+    const blurLabel = document.getElementById("blurLabel");
+    const opacityLabel = document.getElementById("opacityLabel");
+    const blurValue = document.getElementById("blurValue");
+    const opacityValue = document.getElementById("opacityValue");
+    const blurRange = document.getElementById("blurRange");
+    const opacityRange = document.getElementById("opacityRange");
+    const settingsTitle = document.getElementById("settingsTitle");
+    const settingsRoot = document.getElementById("settingsRoot");
+    const settingsToggle = document.getElementById("settingsToggle");
+    const settingsClose = document.getElementById("settingsClose");
+    const langKo = document.getElementById("langKo");
+    const langEn = document.getElementById("langEn");
+    const themeDark = document.getElementById("themeDark");
+    const themeLight = document.getElementById("themeLight");
+    const accentBlue = document.getElementById("accentBlue");
+    const accentGreen = document.getElementById("accentGreen");
+    const accentYellow = document.getElementById("accentYellow");
+    const accentPurple = document.getElementById("accentPurple");
+    const accentRed = document.getElementById("accentRed");
+
+    let time = 0;
+    let language = "ko";
+    let cardTheme = "dark";
+    let accent = "yellow";
+    let cardBlur = 14;
+    let cardOpacity = 42;
+
+    const accents = {
+      blue: {
+        darkColor: "#5b9dff",
+        lightColor: "#2f6fe8",
+        darkGlow: "rgba(91, 157, 255, 0.24)",
+        lightGlow: "rgba(47, 111, 232, 0.22)",
+        darkBorder: "rgba(91, 157, 255, 0.34)",
+        darkActive: "rgba(91, 157, 255, 0.12)",
+        lightBorder: "rgba(91, 157, 255, 0.28)",
+        lightActive: "rgba(91, 157, 255, 0.08)",
+      },
+      green: {
+        darkColor: "#55d38a",
+        lightColor: "#1f8f5f",
+        darkGlow: "rgba(85, 211, 138, 0.24)",
+        lightGlow: "rgba(31, 143, 95, 0.22)",
+        darkBorder: "rgba(85, 211, 138, 0.34)",
+        darkActive: "rgba(85, 211, 138, 0.12)",
+        lightBorder: "rgba(85, 211, 138, 0.28)",
+        lightActive: "rgba(85, 211, 138, 0.08)",
+      },
+      yellow: {
+        darkColor: "#ffd65a",
+        lightColor: "#9a7600",
+        darkGlow: "rgba(255, 214, 90, 0.24)",
+        lightGlow: "rgba(154, 118, 0, 0.2)",
+        darkBorder: "rgba(255, 214, 90, 0.34)",
+        darkActive: "rgba(255, 214, 90, 0.12)",
+        lightBorder: "rgba(255, 214, 90, 0.28)",
+        lightActive: "rgba(255, 214, 90, 0.08)",
+      },
+      purple: {
+        darkColor: "#c48cff",
+        lightColor: "#7a49d7",
+        darkGlow: "rgba(196, 140, 255, 0.24)",
+        lightGlow: "rgba(122, 73, 215, 0.22)",
+        darkBorder: "rgba(196, 140, 255, 0.34)",
+        darkActive: "rgba(196, 140, 255, 0.12)",
+        lightBorder: "rgba(196, 140, 255, 0.28)",
+        lightActive: "rgba(196, 140, 255, 0.08)",
+      },
+      red: {
+        darkColor: "#ff7c86",
+        lightColor: "#cb3b4a",
+        darkGlow: "rgba(255, 124, 134, 0.24)",
+        lightGlow: "rgba(203, 59, 74, 0.22)",
+        darkBorder: "rgba(255, 124, 134, 0.34)",
+        darkActive: "rgba(255, 124, 134, 0.12)",
+        lightBorder: "rgba(255, 124, 134, 0.28)",
+        lightActive: "rgba(255, 124, 134, 0.08)",
+      },
+    };
+
+    const copy = {
+      ko: {
+        title: "Time Collector",
+        settings: "\uC124\uC815",
+        language: "\uC5B8\uC5B4",
+        theme: "\uCE74\uB4DC \uD14C\uB9C8",
+        accent: "\uAC15\uC870 \uC0C9",
+        blur: "\uBE14\uB7EC \uAC15\uB3C4",
+        opacity: "\uD22C\uBA85\uB3C4",
+        timeLabel: "\uD604\uC7AC \uBCF4\uC720\uD55C \uC2DC\uAC04",
+        rateLabel: "+1 time / \uCD08",
+        close: "\uB2EB\uAE30",
+        dark: "Dark",
+        light: "Light",
+        blue: "\uD30C\uB791",
+        green: "\uCD08\uB85D",
+        yellow: "\uB178\uB791",
+        purple: "\uBCF4\uB77C",
+        red: "\uBE68\uAC15",
+      },
+      en: {
+        title: "Time Collector",
+        settings: "Settings",
+        language: "Language",
+        theme: "Card Theme",
+        accent: "Accent Color",
+        blur: "Blur",
+        opacity: "Opacity",
+        timeLabel: "Current time",
+        rateLabel: "+1 time / sec",
+        close: "Close",
+        dark: "Dark",
+        light: "Light",
+        blue: "Blue",
+        green: "Green",
+        yellow: "Yellow",
+        purple: "Purple",
+        red: "Red",
+      },
+    };
+
+    function render() {
+      timeValue.textContent = time.toLocaleString(language === "ko" ? "ko-KR" : "en-US");
+    }
+
+    function applyLanguage(nextLanguage) {
+      language = nextLanguage;
+      const t = copy[language];
+      document.documentElement.lang = language;
+      gameTitle.textContent = t.title;
+      settingsToggle.textContent = t.settings;
+      languageLabel.textContent = t.language;
+      themeLabel.textContent = t.theme;
+      accentLabel.textContent = t.accent;
+      blurLabel.textContent = t.blur;
+      opacityLabel.textContent = t.opacity;
+      settingsTitle.textContent = t.settings;
+      settingsClose.textContent = t.close;
+      themeDark.textContent = t.dark;
+      themeLight.textContent = t.light;
+      accentBlue.textContent = t.blue;
+      accentGreen.textContent = t.green;
+      accentYellow.textContent = t.yellow;
+      accentPurple.textContent = t.purple;
+      accentRed.textContent = t.red;
+      timeLabel.textContent = t.timeLabel;
+      rateLabel.textContent = t.rateLabel;
+      langKo.classList.toggle("active", language === "ko");
+      langEn.classList.toggle("active", language === "en");
+      render();
+    }
+
+    function setSettingsOpen(open) {
+      settingsRoot.classList.toggle("open", open);
+      settingsToggle.setAttribute("aria-expanded", String(open));
+    }
+
+    function applyTheme(nextTheme) {
+      cardTheme = nextTheme;
+      timeCard.dataset.theme = cardTheme;
+      frame.dataset.uiTheme = cardTheme;
+      themeDark.classList.toggle("active", cardTheme === "dark");
+      themeLight.classList.toggle("active", cardTheme === "light");
+      applyAccent(accent);
+    }
+
+    function applyAccent(nextAccent) {
+      accent = nextAccent;
+      const currentTheme = frame.dataset.uiTheme === "light" ? "light" : "dark";
+      const palette = accents[accent];
+      const color = currentTheme === "light" ? palette.lightColor : palette.darkColor;
+      const glow = currentTheme === "light" ? palette.lightGlow : palette.darkGlow;
+      const border = currentTheme === "light" ? palette.lightBorder : palette.darkBorder;
+      const activeBg = currentTheme === "light" ? palette.lightActive : palette.darkActive;
+      frame.style.setProperty("--ui-accent", color);
+      frame.style.setProperty("--ui-accent-glow", glow);
+      frame.style.setProperty("--ui-accent-border", border);
+      frame.style.setProperty("--ui-active-bg", activeBg);
+      frame.style.setProperty("--ui-slider-thumb", color);
+      accentBlue.classList.toggle("active", accent === "blue");
+      accentGreen.classList.toggle("active", accent === "green");
+      accentYellow.classList.toggle("active", accent === "yellow");
+      accentPurple.classList.toggle("active", accent === "purple");
+      accentRed.classList.toggle("active", accent === "red");
+    }
+
+    function applyCardBlur(nextBlur) {
+      cardBlur = nextBlur;
+      document.documentElement.style.setProperty("--card-blur", `${cardBlur}px`);
+      blurValue.textContent = `${cardBlur}px`;
+      blurRange.value = String(cardBlur);
+    }
+
+    function applyCardOpacity(nextOpacity) {
+      cardOpacity = nextOpacity;
+      document.documentElement.style.setProperty("--card-opacity", (cardOpacity / 100).toFixed(2));
+      opacityValue.textContent = `${cardOpacity}%`;
+      opacityRange.value = String(cardOpacity);
+    }
+
+    settingsToggle.addEventListener("click", () => {
+      setSettingsOpen(!settingsRoot.classList.contains("open"));
+    });
+
+    settingsClose.addEventListener("click", () => {
+      setSettingsOpen(false);
+    });
+
+    langKo.addEventListener("click", () => {
+      applyLanguage("ko");
+    });
+
+    langEn.addEventListener("click", () => {
+      applyLanguage("en");
+    });
+
+    themeDark.addEventListener("click", () => {
+      applyTheme("dark");
+    });
+
+    themeLight.addEventListener("click", () => {
+      applyTheme("light");
+    });
+
+    accentBlue.addEventListener("click", () => {
+      applyAccent("blue");
+    });
+
+    accentGreen.addEventListener("click", () => {
+      applyAccent("green");
+    });
+
+    accentYellow.addEventListener("click", () => {
+      applyAccent("yellow");
+    });
+
+    accentPurple.addEventListener("click", () => {
+      applyAccent("purple");
+    });
+
+    accentRed.addEventListener("click", () => {
+      applyAccent("red");
+    });
+
+    blurRange.addEventListener("input", (event) => {
+      applyCardBlur(Number(event.target.value));
+    });
+
+    opacityRange.addEventListener("input", (event) => {
+      applyCardOpacity(Number(event.target.value));
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!settingsRoot.contains(event.target)) {
+        setSettingsOpen(false);
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    });
+
+    render();
+    applyLanguage("ko");
+    applyTheme("dark");
+    applyAccent("yellow");
+    applyCardBlur(14);
+    applyCardOpacity(42);
+
+    setInterval(() => {
+      time += 1;
+      render();
+    }, 1000);
+  </script>
+</body>
+</html>
