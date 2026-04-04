@@ -1,0 +1,1715 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Time Collector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --text: rgba(255, 248, 241, 0.98);
+      --muted: rgba(255, 248, 241, 0.72);
+      --card-blur: 14px;
+      --card-opacity: 0.42;
+      --frame-width: min(92vw, 560px, calc(92vh * 0.671));
+      --frame-pad-x: clamp(20px, 4vw, 56px);
+      --content-width: min(calc(var(--frame-width) - (var(--frame-pad-x) * 2)), 468px);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: clip;
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    /* Background sits behind everything */
+    #bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-color: #0a0c10;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 768px) {
+      body { place-items: start center; padding-top: max(10px, env(safe-area-inset-top)); }
+      .frame { padding-top: calc(14px + env(safe-area-inset-top)); }
+      .ui { gap: 10px; }
+    }
+
+    .frame, .frame * { -webkit-user-select: none; user-select: none; }
+
+    .frame[data-ui-theme="dark"] {
+      --ui-panel-border: rgba(255,248,241,0.14);
+      --ui-control-bg: rgba(12,12,14,0.28);
+      --ui-control-border: rgba(255,248,241,0.14);
+      --ui-text: rgba(255,248,241,0.98);
+      --ui-muted: rgba(255,248,241,0.72);
+      --ui-accent: #ffd9b7;
+      --ui-active-bg: rgba(255,217,183,0.12);
+      --ui-accent-border: rgba(255,217,183,0.34);
+      --ui-accent-glow: rgba(255,217,183,0.22);
+      --ui-slider-track: rgba(255,248,241,0.16);
+      --ui-slider-thumb: rgba(255,248,241,0.92);
+    }
+
+    .frame[data-ui-theme="light"] {
+      --ui-panel-border: rgba(28,28,32,0.08);
+      --ui-control-bg: rgba(255,255,255,0.56);
+      --ui-control-border: rgba(28,28,32,0.08);
+      --ui-text: rgba(24,24,28,0.94);
+      --ui-muted: rgba(24,24,28,0.64);
+      --ui-accent: rgba(24,24,28,0.96);
+      --ui-active-bg: rgba(24,24,28,0.08);
+      --ui-accent-border: rgba(24,24,28,0.22);
+      --ui-accent-glow: rgba(24,24,28,0.1);
+      --ui-slider-track: rgba(24,24,28,0.18);
+      --ui-slider-thumb: rgba(24,24,28,0.92);
+    }
+
+    .frame {
+      position: relative;
+      width: var(--frame-width);
+      height: auto;
+      aspect-ratio: 0.671;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding:
+        calc(24px + env(safe-area-inset-top))
+        var(--frame-pad-x)
+        calc(24px + env(safe-area-inset-bottom))
+        var(--frame-pad-x);
+    }
+
+    @media (min-width: 900px) {
+      :root { --frame-pad-x: 24px; }
+      .frame { padding: 24px; }
+    }
+
+    .ui {
+      width: var(--content-width);
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: clamp(0.62rem, 0.9vw, 0.82rem);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      font-weight: 600;
+      text-shadow: 0 2px 18px rgba(0,0,0,0.34);
+    }
+
+    /* ── Settings ── */
+    .settings { position: relative; flex: 0 0 auto; }
+
+    .settings-toggle {
+      appearance: none;
+      border: 1px solid var(--ui-control-border);
+      background: var(--ui-control-bg);
+      color: var(--ui-text);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 0.72rem;
+      line-height: 1;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .settings-panel {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: var(--content-width);
+      height: min(92vh, 680px);
+      transform: translate(-50%, -50%);
+      padding: 12px;
+      border-radius: 24px;
+      border: 1px solid var(--ui-panel-border);
+      background: rgba(var(--settings-panel-surface), var(--card-opacity));
+      box-shadow: 0 28px 80px rgba(0,0,0,0.42);
+      backdrop-filter: blur(var(--card-blur));
+      -webkit-backdrop-filter: blur(var(--card-blur));
+      display: none;
+      z-index: 20;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      color: var(--ui-text);
+      overflow: clip;
+    }
+
+    .frame[data-ui-theme="dark"] .settings-panel {
+      --settings-panel-surface: 12,12,14;
+      --settings-section-border: rgba(255,248,241,0.1);
+      --settings-control-bg: rgba(12,12,14,0.28);
+      --settings-control-border: rgba(255,248,241,0.14);
+    }
+
+    .frame[data-ui-theme="light"] .settings-panel {
+      --settings-panel-surface: 255,247,241;
+      --settings-section-border: rgba(28,28,32,0.08);
+      --settings-control-bg: rgba(255,255,255,0.56);
+      --settings-control-border: rgba(28,28,32,0.08);
+    }
+
+    .settings.open .settings-panel { display: grid; }
+
+    .settings-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .settings-close {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 999px;
+      padding: 6px 9px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    /* sections */
+    .settings-sections {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .settings-sections::-webkit-scrollbar { display: none; }
+
+    .settings-section {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 0;
+      flex-shrink: 0;
+    }
+
+    .settings-section + .settings-section {
+      border-top: 1px solid var(--settings-section-border);
+    }
+
+    .settings-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 7px 2px;
+    }
+
+    .settings-group--slider { gap: 12px; }
+    .settings-group--slider .slider { flex: 1 1 0; }
+    .settings-group--slider .slider-value {
+      flex: 0 0 auto;
+      text-align: right;
+      min-width: 30px;
+      color: var(--ui-muted);
+      font-size: 0.62rem;
+    }
+
+    .settings-label {
+      margin: 0;
+      color: var(--ui-muted);
+      font-size: 0.62rem;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+
+    /* lang / theme buttons */
+    .lang-row, .theme-row { display: flex; gap: 6px; }
+
+    .lang-btn, .theme-btn {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .lang-btn.active, .theme-btn.active {
+      border-color: var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+    }
+
+    /* accent dots */
+    .accent-row { display: flex; gap: 10px; align-items: center; padding: 4px 2px; }
+
+    .accent-btn {
+      appearance: none;
+      border: none;
+      background: var(--accent-swatch);
+      padding: 0; margin: 0;
+      cursor: pointer;
+      width: 14px; height: 14px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1.5px rgba(255,255,255,0.18);
+      flex: 0 0 auto;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+
+    .accent-btn:hover { transform: scale(1.2); }
+
+    .accent-btn.active {
+      box-shadow:
+        0 0 0 2.5px var(--ui-control-bg, #0c0c0e),
+        0 0 0 4.5px var(--accent-swatch);
+      transform: scale(1.1);
+    }
+
+    /* custom accent button */
+    .accent-btn--custom {
+      font-size: 9px;
+      line-height: 14px;
+      color: rgba(255,255,255,0.7);
+      border: 1.5px dashed rgba(255,255,255,0.3) !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .accent-btn--custom.active {
+      border-color: var(--ui-accent-border) !important;
+      color: var(--ui-accent);
+    }
+
+    .custom-accent-row {
+      gap: 6px !important;
+      padding: 2px 2px 6px !important;
+    }
+
+    .custom-accent-hash {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--ui-muted);
+      flex: 0 0 auto;
+    }
+
+    .custom-accent-input {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      font: inherit;
+      font-size: 0.68rem;
+      font-family: monospace;
+      letter-spacing: 0.06em;
+      outline: none;
+      -webkit-user-select: text;
+      user-select: text;
+      transition: border-color 140ms ease;
+    }
+
+    .custom-accent-input:focus {
+      border-color: var(--ui-accent-border);
+    }
+
+    .custom-accent-input.valid {
+      border-color: rgba(100,220,130,0.6);
+    }
+
+    .custom-accent-apply {
+      appearance: none;
+      flex: 0 0 auto;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+      border-radius: 10px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 0.62rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .custom-accent-error {
+      margin: 0 2px 4px;
+      font-size: 0.58rem;
+      color: rgba(255,110,110,0.85);
+    }
+
+    /* background upload */
+    .bg-btn-row { display: flex; gap: 6px; }
+
+    .bg-upload-btn {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .bg-reset-btn {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: transparent;
+      color: var(--ui-muted);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    /* slider */
+    .slider {
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--ui-slider-track);
+      outline: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-slider-thumb);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+    }
+
+    .slider::-moz-range-thumb {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-slider-thumb);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+    }
+
+    /* ── Time card ── */
+    .time-block { width: 100%; padding-top: 2px; }
+
+    .time-card {
+      width: 100%;
+      display: grid;
+      gap: 8px;
+      padding: 12px 12px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      background: rgba(var(--card-surface), var(--card-opacity));
+      backdrop-filter: blur(var(--card-blur));
+      -webkit-backdrop-filter: blur(var(--card-blur));
+      box-shadow: 0 18px 48px rgba(0,0,0,0.16);
+    }
+
+    .time-card[data-theme="dark"] {
+      --card-surface: 12,12,14;
+      --card-border: rgba(255,248,241,0.12);
+      --card-label: rgba(255,248,241,0.72);
+      --card-accent: #ffd9b7;
+    }
+
+    .time-card[data-theme="light"] {
+      --card-surface: 255,247,241;
+      --card-border: rgba(255,255,255,0.34);
+      --card-label: rgba(20,20,24,0.66);
+      --card-accent: rgba(24,24,28,0.96);
+    }
+
+    /* time value row */
+    .time-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+    }
+
+    .time {
+      margin: 0;
+      font-size: clamp(1.15rem, 2.4vw, 1.65rem);
+      line-height: 0.92;
+      font-weight: 800;
+      letter-spacing: -0.06em;
+      color: var(--ui-accent);
+      text-shadow: 0 0 24px var(--ui-accent-glow), 0 2px 18px rgba(0,0,0,0.18);
+      word-break: break-all;
+    }
+
+    .time-unit {
+      margin: 0;
+      font-size: clamp(0.56rem, 0.85vw, 0.7rem);
+      font-weight: 600;
+      color: var(--ui-accent);
+      opacity: 0.65;
+      letter-spacing: 0em;
+      white-space: nowrap;
+    }
+
+    .rate {
+      margin: 0;
+      font-size: clamp(0.66rem, 1.0vw, 0.78rem);
+      line-height: 1.35;
+      color: var(--card-label);
+      letter-spacing: -0.02em;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.2);
+    }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--card-border);
+    }
+
+    .tab-btn {
+      appearance: none;
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--card-label);
+      border-radius: 10px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 0.64rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+    }
+
+    .tab-btn.active {
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+    }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Upgrade panel ── */
+    .upgrade-panel {
+      display: grid;
+      gap: 8px;
+      padding: 11px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+        rgba(0,0,0,0.08);
+    }
+
+    .time-card[data-theme="light"] .upgrade-panel {
+      border-color: rgba(24,24,28,0.08);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.38)),
+        rgba(255,255,255,0.16);
+    }
+
+    .upgrade-copy { display: grid; gap: 3px; }
+
+    .upgrade-title {
+      margin: 0;
+      font-size: 0.76rem;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--card-accent);
+    }
+
+    .upgrade-subtitle {
+      margin: 0;
+      font-size: 0.64rem;
+      line-height: 1.35;
+      color: var(--card-label);
+      letter-spacing: -0.02em;
+    }
+
+    .upgrade-meta {
+      font-size: 0.64rem;
+      line-height: 1.35;
+      color: var(--card-label);
+      letter-spacing: -0.02em;
+    }
+
+    .upgrade-btn {
+      appearance: none;
+      border: 1px solid var(--ui-accent-border);
+      background: var(--ui-active-bg);
+      color: var(--ui-accent);
+      border-radius: 12px;
+      padding: 9px 10px;
+      font: inherit;
+      font-size: 0.66rem;
+      line-height: 1;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    .upgrade-btn:hover:not(:disabled) { transform: translateY(-1px); }
+
+    .upgrade-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+      transform: none;
+    }
+    /* ── Save slots ── */
+    .save-slot-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 2px 0 6px;
+    }
+
+    .save-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 4px 6px;
+      border-radius: 14px;
+      border: 1px solid var(--settings-control-border);
+      background: var(--settings-control-bg);
+    }
+
+    .save-slot-label {
+      font-size: 0.54rem;
+      color: var(--ui-muted);
+      letter-spacing: 0.02em;
+    }
+
+    .save-slot-time {
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: var(--ui-accent);
+      letter-spacing: -0.02em;
+      min-height: 0.9em;
+      text-align: center;
+    }
+
+    .save-slot-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .save-slot-btns button {
+      appearance: none;
+      border: 1px solid var(--settings-control-border);
+      background: transparent;
+      color: var(--ui-text);
+      border-radius: 8px;
+      padding: 4px 6px;
+      font: inherit;
+      font-size: 0.56rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .save-slot-btns button.is-save {
+      border-color: var(--ui-accent-border);
+      color: var(--ui-accent);
+    }
+
+    .save-slot-btns button:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .save-status {
+      font-size: 0.6rem !important;
+      color: var(--ui-accent) !important;
+      min-height: 1em;
+      transition: opacity 0.3s;
+    }
+
+    .autosave-hint {
+      font-size: 0.58rem !important;
+      color: var(--ui-muted) !important;
+      font-style: italic;
+    }
+
+    /* ── Danger zone ── */
+    .danger-zone-label {
+      color: rgba(255, 90, 90, 0.75) !important;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 0.56rem !important;
+    }
+
+    .danger-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 75, 75, 0.38);
+      background: rgba(255, 60, 60, 0.06);
+      margin: 2px 0 4px;
+    }
+
+    .danger-desc {
+      margin: 0;
+      font-size: 0.6rem;
+      color: var(--ui-muted);
+      line-height: 1.4;
+      flex: 1;
+    }
+
+    .danger-btn {
+      appearance: none;
+      flex: 0 0 auto;
+      border: 1px solid rgba(255, 75, 75, 0.55);
+      background: rgba(255, 60, 60, 0.1);
+      color: rgba(255, 110, 110, 0.9);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 0.62rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 140ms ease, border-color 140ms ease;
+    }
+
+    .danger-btn:hover {
+      background: rgba(255, 60, 60, 0.18);
+      border-color: rgba(255, 75, 75, 0.75);
+    }
+
+    /* ── Danger modal ── */
+    .danger-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.62);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    .danger-modal-box {
+      width: min(88vw, 340px);
+      padding: 22px 20px 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 75, 75, 0.45);
+      background: rgba(18, 10, 10, 0.96);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,60,60,0.1) inset;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .danger-modal-title {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: rgba(255,110,110,0.95);
+      letter-spacing: -0.02em;
+    }
+
+    .danger-modal-desc {
+      margin: 0;
+      font-size: 0.66rem;
+      color: rgba(255,248,241,0.7);
+      line-height: 1.5;
+    }
+
+    .danger-modal-phrase-hint {
+      margin: 0;
+      font-size: 0.58rem;
+      color: rgba(255,248,241,0.5);
+    }
+
+    .danger-modal-phrase {
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: rgba(255,248,241,0.92);
+      letter-spacing: -0.01em;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .danger-modal-input {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,75,75,0.35);
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,248,241,0.95);
+      font: inherit;
+      font-size: 0.68rem;
+      outline: none;
+      transition: border-color 140ms ease;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    .danger-modal-input:focus {
+      border-color: rgba(255,75,75,0.7);
+    }
+
+    .danger-modal-input.match {
+      border-color: rgba(100,220,130,0.7);
+    }
+
+    .danger-modal-error {
+      margin: 0;
+      font-size: 0.58rem;
+      color: rgba(255,110,110,0.85);
+      min-height: 0.9em;
+    }
+
+    .danger-modal-btns {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 2px;
+    }
+
+    .danger-modal-cancel {
+      appearance: none;
+      border: 1px solid rgba(255,248,241,0.18);
+      background: transparent;
+      color: rgba(255,248,241,0.7);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 0.64rem;
+      cursor: pointer;
+    }
+
+    .danger-modal-confirm {
+      appearance: none;
+      border: 1px solid rgba(255,75,75,0.5);
+      background: rgba(255,60,60,0.15);
+      color: rgba(255,110,110,0.9);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 0.64rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 140ms ease, opacity 140ms ease;
+    }
+
+    .danger-modal-confirm:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .danger-modal-confirm:not(:disabled):hover {
+      background: rgba(255,60,60,0.28);
+    }
+  </style>
+</head>
+<body>
+  <div id="bg-layer"></div>
+  <input type="file" id="bgFileInput" accept="image/*" style="display:none;" />
+
+  <!-- 초기화 확인 모달 -->
+  <div id="dangerModal" class="danger-modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="danger-modal-box">
+      <p class="danger-modal-title" id="dangerModalTitle">초기화 확인</p>
+      <p class="danger-modal-desc" id="dangerModalDesc">게임 진행 상황이 모두 삭제됩니다.</p>
+      <p class="danger-modal-phrase-hint" id="dangerModalHint">아래 문구를 입력하세요:</p>
+      <p class="danger-modal-phrase" id="dangerModalPhrase">누구의 삶인들 향기롭지 않으랴</p>
+      <input class="danger-modal-input" id="dangerModalInput" type="text" autocomplete="off" spellcheck="false" placeholder="" />
+      <p class="danger-modal-error" id="dangerModalError"></p>
+      <div class="danger-modal-btns">
+        <button class="danger-modal-cancel" id="dangerModalCancel" type="button">취소</button>
+        <button class="danger-modal-confirm" id="dangerModalConfirm" type="button">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="frame" aria-label="Time Collector game" data-ui-theme="dark">
+    <section class="ui" aria-live="polite">
+
+      <!-- Topbar -->
+      <div class="topbar">
+        <div class="title">
+          <h1 id="gameTitle">Time Collector</h1>
+        </div>
+        <div class="settings" id="settingsRoot">
+          <button class="settings-toggle" id="settingsToggle" type="button" aria-expanded="false" aria-controls="settingsPanel">설정</button>
+          <div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+            <div class="settings-head">
+              <p class="settings-title" id="settingsTitle">설정</p>
+              <button class="settings-close" id="settingsClose" type="button">닫기</button>
+            </div>
+            <div class="settings-sections">
+
+              <!-- 표시 설정 -->
+              <div class="settings-section">
+                <div class="settings-group">
+                  <p class="settings-label" id="languageLabel">언어</p>
+                  <div class="lang-row">
+                    <button class="lang-btn" id="langKo" type="button">한국어</button>
+                    <button class="lang-btn" id="langEn" type="button">English</button>
+                  </div>
+                </div>
+                <div class="settings-group">
+                  <p class="settings-label" id="themeLabel">카드 테마</p>
+                  <div class="theme-row">
+                    <button class="theme-btn" id="themeDark"  type="button">Dark</button>
+                    <button class="theme-btn" id="themeLight" type="button">Light</button>
+                  </div>
+                </div>
+                <div class="settings-group">
+                  <p class="settings-label" id="accentLabel">강조 색</p>
+                  <div class="accent-row">
+                    <button class="accent-btn" id="accentBlue"   type="button" style="--accent-swatch:#5b9dff;" aria-label="파랑"></button>
+                    <button class="accent-btn" id="accentGreen"  type="button" style="--accent-swatch:#55d38a;" aria-label="초록"></button>
+                    <button class="accent-btn" id="accentYellow" type="button" style="--accent-swatch:#ffd65a;" aria-label="노랑"></button>
+                    <button class="accent-btn" id="accentPurple" type="button" style="--accent-swatch:#c48cff;" aria-label="보라"></button>
+                    <button class="accent-btn" id="accentRed"    type="button" style="--accent-swatch:#ff7c86;" aria-label="빨강"></button>
+                    <button class="accent-btn accent-btn--custom" id="accentCustom" type="button" style="--accent-swatch:#888888;" aria-label="커스텀">＋</button>
+                  </div>
+                </div>
+                <!-- 커스텀 색상 입력 -->
+                <div class="settings-group custom-accent-row" id="customAccentRow" style="display:none;">
+                  <span class="custom-accent-hash">#</span>
+                  <input class="custom-accent-input" id="customAccentInput" type="text" maxlength="6" placeholder="ff0080" autocomplete="off" spellcheck="false" />
+                  <button class="custom-accent-apply" id="customAccentApply" type="button">적용</button>
+                </div>
+                <p class="custom-accent-error" id="customAccentError" style="display:none;"></p>
+              </div>
+
+              <!-- 카드 모양 -->
+              <div class="settings-section">
+                <div class="settings-group settings-group--slider">
+                  <p class="settings-label" id="blurLabel">블러 강도</p>
+                  <input class="slider" id="blurRange" type="range" min="0" max="28" step="1" />
+                  <span id="blurValue">14px</span>
+                </div>
+                <div class="settings-group settings-group--slider">
+                  <p class="settings-label" id="opacityLabel">투명도</p>
+                  <input class="slider" id="opacityRange" type="range" min="15" max="75" step="1" />
+                  <span id="opacityValue">42%</span>
+                </div>
+              </div>
+
+              <!-- 배경 -->
+              <div class="settings-section">
+                <div class="settings-group">
+                  <p class="settings-label" id="bgLabel">배경 이미지</p>
+                  <div class="bg-btn-row">
+                    <button class="bg-upload-btn" id="bgUploadBtn" type="button">사진 가져오기</button>
+                    <button class="bg-reset-btn"  id="bgResetBtn"  type="button">초기화</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 저장 / 불러오기 -->
+              <div class="settings-section">
+                <div class="settings-group">
+                  <p class="settings-label" id="saveLoadLabel">저장 / 불러오기</p>
+                </div>
+                <!-- 자동저장 토글 + 주기 슬라이더 -->
+                <div class="settings-group">
+                  <p class="settings-label" id="autosaveLabel">자동저장</p>
+                  <div class="lang-row">
+                    <button class="lang-btn active" id="autosaveOn"  type="button">켜짐</button>
+                    <button class="lang-btn"        id="autosaveOff" type="button">꺼짐</button>
+                  </div>
+                </div>
+                <div class="settings-group settings-group--slider" id="autosaveIntervalGroup">
+                  <p class="settings-label" id="autosaveIntervalLabel">저장 주기</p>
+                  <input class="slider" id="autosaveRange" type="range" min="10" max="300" step="10" value="30" />
+                  <span id="autosaveValue">30초</span>
+                </div>
+                <div class="settings-group" style="padding:2px 2px 4px;">
+                  <p class="settings-label autosave-hint" id="autosaveHint">자동저장 안 됨</p>
+                </div>
+                <div class="save-slot-grid" id="saveSlotGrid">
+                  <!-- slots rendered by JS -->
+                </div>
+                <div class="settings-group" style="padding-top:4px;">
+                  <p class="settings-label save-status" id="saveStatus"></p>
+                </div>
+              </div>
+
+              <!-- 위험 구역 -->
+              <div class="settings-section danger-section">
+                <div class="danger-card" id="dangerCard">
+                  <p class="danger-desc" id="dangerDesc">게임 진행 상황이 모두 삭제됩니다.</p>
+                  <button class="danger-btn" id="gameResetBtn" type="button">초기화</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time card — always visible -->
+      <div class="time-block">
+        <div class="time-card" id="timeCard" data-theme="dark">
+          <!-- Time display (always shown) -->
+          <div class="time-value-row">
+            <p class="time" id="timeValue">0</p>
+            <p class="time-unit" id="timeUnit">시간</p>
+          </div>
+          <p class="rate" id="rateLabel">생산량: +1 시간 / 초</p>
+
+          <!-- Tab bar -->
+          <div class="tab-bar">
+            <button class="tab-btn active" id="tabMain"    type="button">메인</button>
+            <button class="tab-btn"        id="tabUpgrade" type="button">업그레이드</button>
+          </div>
+
+          <!-- Main tab -->
+          <div class="tab-panel active" id="panelMain"></div>
+
+          <!-- Upgrade tab -->
+          <div class="tab-panel" id="panelUpgrade">
+            <div class="upgrade-panel">
+              <div class="upgrade-copy">
+                <p class="upgrade-title"    id="upgradeTitle">생산량 업그레이드</p>
+                <p class="upgrade-subtitle" id="upgradeSubtitle">초당 시간 생산량을 1 늘립니다.</p>
+              </div>
+              <div class="upgrade-meta" id="upgradeMeta">레벨 0 | 비용 10</div>
+              <button class="upgrade-btn"  id="upgradeButton" type="button">구매</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // ── DOM refs ──────────────────────────────────────────────
+    const frame           = document.querySelector(".frame");
+    const bgLayer         = document.getElementById("bg-layer");
+    const bgFileInput     = document.getElementById("bgFileInput");
+    const bgUploadBtn     = document.getElementById("bgUploadBtn");
+    const bgResetBtn      = document.getElementById("bgResetBtn");
+    const bgLabel         = document.getElementById("bgLabel");
+    const gameTitle       = document.getElementById("gameTitle");
+    const timeValue       = document.getElementById("timeValue");
+    const timeUnit        = document.getElementById("timeUnit");
+    const rateLabel       = document.getElementById("rateLabel");
+    const upgradeTitle    = document.getElementById("upgradeTitle");
+    const upgradeSubtitle = document.getElementById("upgradeSubtitle");
+    const upgradeMeta     = document.getElementById("upgradeMeta");
+    const upgradeButton   = document.getElementById("upgradeButton");
+    const timeCard        = document.getElementById("timeCard");
+    const languageLabel   = document.getElementById("languageLabel");
+    const themeLabel      = document.getElementById("themeLabel");
+    const accentLabel     = document.getElementById("accentLabel");
+    const blurLabel       = document.getElementById("blurLabel");
+    const opacityLabel    = document.getElementById("opacityLabel");
+    const blurValue       = document.getElementById("blurValue");
+    const opacityValue    = document.getElementById("opacityValue");
+    const blurRange       = document.getElementById("blurRange");
+    const opacityRange    = document.getElementById("opacityRange");
+    const settingsTitle   = document.getElementById("settingsTitle");
+    const settingsRoot    = document.getElementById("settingsRoot");
+    const settingsToggle  = document.getElementById("settingsToggle");
+    const settingsClose   = document.getElementById("settingsClose");
+    const langKo          = document.getElementById("langKo");
+    const langEn          = document.getElementById("langEn");
+    const themeDark       = document.getElementById("themeDark");
+    const themeLight      = document.getElementById("themeLight");
+    const accentBlue      = document.getElementById("accentBlue");
+    const accentGreen     = document.getElementById("accentGreen");
+    const accentYellow    = document.getElementById("accentYellow");
+    const accentPurple    = document.getElementById("accentPurple");
+    const accentRed         = document.getElementById("accentRed");
+    const accentCustomBtn   = document.getElementById("accentCustom");
+    const customAccentRow   = document.getElementById("customAccentRow");
+    const customAccentInput = document.getElementById("customAccentInput");
+    const customAccentApply = document.getElementById("customAccentApply");
+    const customAccentError = document.getElementById("customAccentError");
+    const tabMain         = document.getElementById("tabMain");
+    const tabUpgrade      = document.getElementById("tabUpgrade");
+    const panelMain       = document.getElementById("panelMain");
+    const panelUpgrade    = document.getElementById("panelUpgrade");
+    const saveLoadLabel   = document.getElementById("saveLoadLabel");
+    const saveSlotGrid    = document.getElementById("saveSlotGrid");
+    const saveStatus      = document.getElementById("saveStatus");
+    const autosaveLabel   = document.getElementById("autosaveLabel");
+    const autosaveOnBtn   = document.getElementById("autosaveOn");
+    const autosaveOffBtn  = document.getElementById("autosaveOff");
+    const autosaveIntervalGroup = document.getElementById("autosaveIntervalGroup");
+    const autosaveIntervalLabel = document.getElementById("autosaveIntervalLabel");
+    const autosaveRange   = document.getElementById("autosaveRange");
+    const autosaveValue   = document.getElementById("autosaveValue");
+    const autosaveHint    = document.getElementById("autosaveHint");
+    const dangerDesc       = document.getElementById("dangerDesc");
+    const gameResetBtn     = document.getElementById("gameResetBtn");
+    const dangerModal      = document.getElementById("dangerModal");
+    const dangerModalTitle = document.getElementById("dangerModalTitle");
+    const dangerModalDesc  = document.getElementById("dangerModalDesc");
+    const dangerModalHint  = document.getElementById("dangerModalHint");
+    const dangerModalPhrase= document.getElementById("dangerModalPhrase");
+    const dangerModalInput = document.getElementById("dangerModalInput");
+    const dangerModalError = document.getElementById("dangerModalError");
+    const dangerModalCancel= document.getElementById("dangerModalCancel");
+    const dangerModalConfirm=document.getElementById("dangerModalConfirm");
+
+    // ── Game state ────────────────────────────────────────────
+    let time            = 0;
+    let language        = "ko";
+    let cardTheme       = "dark";
+    let accent          = "yellow";
+    let cardBlur        = 14;
+    let cardOpacity     = 42;
+    let productionRate  = 1;
+    let productionLevel = 0;
+    const baseUpgradeCost = 10;
+    let customBgUrl     = null;
+    let customAccentColor = null;  // 저장된 커스텀 hex (# 제외)
+
+    // ── Autosave state ────────────────────────────────────────
+    const AUTOSAVE_KEY   = "timecollector_autosave";
+    const AUTOSAVE_SETTINGS_KEY = "timecollector_autosave_settings";
+    let autosaveEnabled  = true;
+    let autosaveInterval = 30;      // seconds
+    let autosaveTimer    = null;
+    let lastAutosaveAt   = null;    // Date.now() timestamp
+    let autosaveHintTimer = null;
+
+    // ── Accent palette ────────────────────────────────────────
+    const accents = {
+      blue:   { darkColor:"#5b9dff",  lightColor:"#2f6fe8",  darkGlow:"rgba(91,157,255,0.24)",  lightGlow:"rgba(47,111,232,0.22)",  darkBorder:"rgba(91,157,255,0.34)",  darkActive:"rgba(91,157,255,0.12)",  lightBorder:"rgba(91,157,255,0.28)", lightActive:"rgba(91,157,255,0.08)"  },
+      green:  { darkColor:"#55d38a",  lightColor:"#1f8f5f",  darkGlow:"rgba(85,211,138,0.24)",  lightGlow:"rgba(31,143,95,0.22)",   darkBorder:"rgba(85,211,138,0.34)",  darkActive:"rgba(85,211,138,0.12)",  lightBorder:"rgba(85,211,138,0.28)",lightActive:"rgba(85,211,138,0.08)"  },
+      yellow: { darkColor:"#ffd65a",  lightColor:"#9a7600",  darkGlow:"rgba(255,214,90,0.24)",  lightGlow:"rgba(154,118,0,0.2)",    darkBorder:"rgba(255,214,90,0.34)",  darkActive:"rgba(255,214,90,0.12)",  lightBorder:"rgba(255,214,90,0.28)",lightActive:"rgba(255,214,90,0.08)" },
+      purple: { darkColor:"#c48cff",  lightColor:"#7a49d7",  darkGlow:"rgba(196,140,255,0.24)", lightGlow:"rgba(122,73,215,0.22)",  darkBorder:"rgba(196,140,255,0.34)", darkActive:"rgba(196,140,255,0.12)", lightBorder:"rgba(196,140,255,0.28)",lightActive:"rgba(196,140,255,0.08)" },
+      red:    { darkColor:"#ff7c86",  lightColor:"#cb3b4a",  darkGlow:"rgba(255,124,134,0.24)", lightGlow:"rgba(203,59,74,0.22)",   darkBorder:"rgba(255,124,134,0.34)", darkActive:"rgba(255,124,134,0.12)", lightBorder:"rgba(255,124,134,0.28)",lightActive:"rgba(255,124,134,0.08)" },
+    };
+
+    // ── Localized copy ────────────────────────────────────────
+    const copy = {
+      ko: {
+        title:"Time Collector", settings:"설정", settingsTitle:"설정",
+        language:"언어", theme:"카드 테마", accent:"강조 색",
+        blur:"블러 강도", opacity:"투명도", bg:"배경 이미지",
+        bgUpload:"사진 가져오기", bgReset:"초기화",
+        ratePrefix:"생산량: +", rateSuffix:" 시간 / 초",
+        timeUnit:"시간",
+        upgradeTitle:"생산량 업그레이드",
+        upgradeSubtitle:"초당 시간 생산량을 1 늘립니다.",
+        upgradeButton:"구매", upgradeLocked:"시간 부족",
+        upgradeLevel:"레벨", upgradeCost:"비용",
+        close:"닫기", dark:"Dark", light:"Light",
+        blue:"파랑", green:"초록", yellow:"노랑", purple:"보라", red:"빨강",
+        customAccent:"커스텀", customAccentPlaceholder:"6자리 색코드 (예: ff0080)", customAccentError:"올바른 6자리 hex 코드를 입력하세요",
+        tabMain:"메인", tabUpgrade:"업그레이드",
+        saveLoad:"저장 / 불러오기",
+        saveBtn:"저장", loadBtn:"불러오기", resetBtn:"초기화",
+        saveOk:"저장 완료!", loadOk:"불러오기 완료!", loadNone:"저장된 데이터 없음",
+        saveInfo:"저장 슬롯",
+        dangerZone:"위험 구역",
+        dangerDesc:"게임 진행 상황이 모두 삭제됩니다.",
+        dangerBtn:"초기화",
+        dangerPrompt:"확인 문구를 입력하세요",
+        dangerPhrase:"누구의 삶인들 향기롭지 않으랴",
+        dangerWrong:"문구가 일치하지 않습니다.",
+        dangerCancel:"취소",
+        dangerConfirm:"초기화",
+        autosave:"자동저장",
+        autosaveInterval:"저장 주기",
+        autosaveOn:"켜짐", autosaveOff:"꺼짐",
+        autosaveSec:"초",
+        autosaveLastFmt: (s) => `마지막 저장: ${s}초 전`,
+        autosaveNever:"자동저장 안 됨",
+      },
+      en: {
+        title:"Time Collector", settings:"Settings", settingsTitle:"Settings",
+        language:"Language", theme:"Card Theme", accent:"Accent Color",
+        blur:"Blur", opacity:"Opacity", bg:"Background",
+        bgUpload:"Upload photo", bgReset:"Reset",
+        ratePrefix:"Production: +", rateSuffix:" time / sec",
+        timeUnit:"time",
+        upgradeTitle:"Production Upgrade",
+        upgradeSubtitle:"Increase time production by 1 per second.",
+        upgradeButton:"Buy", upgradeLocked:"Not enough time",
+        upgradeLevel:"Level", upgradeCost:"Cost",
+        close:"Close", dark:"Dark", light:"Light",
+        blue:"Blue", green:"Green", yellow:"Yellow", purple:"Purple", red:"Red",
+        customAccent:"Custom", customAccentPlaceholder:"6-digit hex code (e.g. ff0080)", customAccentError:"Please enter a valid 6-digit hex code",
+        tabMain:"Main", tabUpgrade:"Upgrade",
+        saveLoad:"Save / Load",
+        saveBtn:"Save", loadBtn:"Load", resetBtn:"Reset",
+        saveOk:"Saved!", loadOk:"Loaded!", loadNone:"No save data",
+        saveInfo:"Save Slot",
+        dangerZone:"Danger Zone",
+        dangerDesc:"All game progress will be permanently deleted.",
+        dangerBtn:"Reset Game",
+        dangerPrompt:"Type the phrase to confirm",
+        dangerPhrase:"whose life is not fragrant",
+        dangerWrong:"Phrase doesn't match.",
+        dangerCancel:"Cancel",
+        dangerConfirm:"Reset",
+        autosave:"Auto-save",
+        autosaveInterval:"Interval",
+        autosaveOn:"On", autosaveOff:"Off",
+        autosaveSec:"s",
+        autosaveLastFmt: (s) => `Last saved: ${s}s ago`,
+        autosaveNever:"Not saved yet",
+      },
+    };
+
+    // ── Render ────────────────────────────────────────────────
+    function render() {
+      const displayTime = Math.floor(time);
+      timeValue.textContent = displayTime.toLocaleString(language === "ko" ? "ko-KR" : "en-US");
+      const t = copy[language];
+      const cost = getUpgradeCost();
+      rateLabel.textContent    = `${t.ratePrefix}${productionRate}${t.rateSuffix}`;
+      upgradeMeta.textContent  = `${t.upgradeLevel} ${productionLevel} | ${t.upgradeCost} ${cost}`;
+      upgradeButton.textContent = displayTime >= cost ? t.upgradeButton : t.upgradeLocked;
+      upgradeButton.disabled    = displayTime < cost;
+    }
+
+    // ── Language ──────────────────────────────────────────────
+    function applyLanguage(next) {
+      language = next;
+      const t  = copy[language];
+      document.documentElement.lang  = language;
+      gameTitle.textContent           = t.title;
+      settingsToggle.textContent      = t.settings;
+      settingsTitle.textContent       = t.settingsTitle;
+      settingsClose.textContent       = t.close;
+      languageLabel.textContent       = t.language;
+      themeLabel.textContent          = t.theme;
+      accentLabel.textContent         = t.accent;
+      blurLabel.textContent           = t.blur;
+      opacityLabel.textContent        = t.opacity;
+      bgLabel.textContent             = t.bg;
+      bgUploadBtn.textContent         = t.bgUpload;
+      bgResetBtn.textContent          = t.bgReset;
+      themeDark.textContent           = t.dark;
+      themeLight.textContent          = t.light;
+      timeUnit.textContent            = t.timeUnit;
+      upgradeTitle.textContent        = t.upgradeTitle;
+      upgradeSubtitle.textContent     = t.upgradeSubtitle;
+      tabMain.textContent             = t.tabMain;
+      tabUpgrade.textContent          = t.tabUpgrade;
+      accentBlue.setAttribute("aria-label",   t.blue);
+      accentGreen.setAttribute("aria-label",  t.green);
+      accentYellow.setAttribute("aria-label", t.yellow);
+      accentPurple.setAttribute("aria-label", t.purple);
+      accentRed.setAttribute("aria-label",    t.red);
+      accentCustomBtn.setAttribute("aria-label", t.customAccent);
+      customAccentInput.placeholder = t.customAccentPlaceholder;
+      customAccentApply.textContent = t.customAccent;
+      langKo.classList.toggle("active", language === "ko");
+      langEn.classList.toggle("active", language === "en");
+      if (typeof renderSaveSlots === "function") renderSaveSlots();
+      render();
+    }
+
+    // ── Settings open/close ───────────────────────────────────
+    function setSettingsOpen(open) {
+      settingsRoot.classList.toggle("open", open);
+      settingsToggle.setAttribute("aria-expanded", String(open));
+    }
+
+    // ── Theme ─────────────────────────────────────────────────
+    function applyTheme(next) {
+      cardTheme = next;
+      timeCard.dataset.theme = cardTheme;
+      frame.dataset.uiTheme  = cardTheme;
+      themeDark.classList.toggle("active",  cardTheme === "dark");
+      themeLight.classList.toggle("active", cardTheme === "light");
+      applyAccent(accent);
+    }
+
+    // ── Accent ────────────────────────────────────────────────
+    // hex → rgba helper
+    function hexToRgba(hex, a) {
+      const r = parseInt(hex.slice(0,2),16);
+      const g = parseInt(hex.slice(2,4),16);
+      const b = parseInt(hex.slice(4,6),16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+
+    function applyAccent(next) {
+      accent = next;
+      const isCustom = (next === "custom");
+      const dark     = frame.dataset.uiTheme !== "light";
+
+      if (isCustom && customAccentColor) {
+        const hex  = customAccentColor;
+        const col  = "#" + hex;
+        frame.style.setProperty("--ui-accent",        col);
+        frame.style.setProperty("--ui-accent-glow",   hexToRgba(hex, 0.28));
+        frame.style.setProperty("--ui-accent-border", hexToRgba(hex, 0.5));
+        frame.style.setProperty("--ui-active-bg",     hexToRgba(hex, 0.14));
+        frame.style.setProperty("--ui-slider-thumb",  col);
+        // 커스텀 버튼 swatch 색도 갱신
+        accentCustomBtn.style.setProperty("--accent-swatch", col);
+      } else if (!isCustom) {
+        const p = accents[accent];
+        frame.style.setProperty("--ui-accent",        dark ? p.darkColor  : p.lightColor);
+        frame.style.setProperty("--ui-accent-glow",   dark ? p.darkGlow   : p.lightGlow);
+        frame.style.setProperty("--ui-accent-border", dark ? p.darkBorder : p.lightBorder);
+        frame.style.setProperty("--ui-active-bg",     dark ? p.darkActive : p.lightActive);
+        frame.style.setProperty("--ui-slider-thumb",  dark ? p.darkColor  : p.lightColor);
+      }
+
+      accentBlue.classList.toggle("active",   accent === "blue");
+      accentGreen.classList.toggle("active",  accent === "green");
+      accentYellow.classList.toggle("active", accent === "yellow");
+      accentPurple.classList.toggle("active", accent === "purple");
+      accentRed.classList.toggle("active",    accent === "red");
+      accentCustomBtn.classList.toggle("active", isCustom);
+    }
+
+    // ── 커스텀 강조색 ─────────────────────────────────────────
+    function isValidHex6(v) { return /^[0-9a-fA-F]{6}$/.test(v); }
+
+    function applyCustomAccent(hex) {
+      customAccentColor = hex.toLowerCase();
+      applyAccent("custom");
+      customAccentRow.style.display   = "none";
+      customAccentError.style.display = "none";
+      customAccentInput.classList.remove("valid");
+    }
+
+    function toggleCustomAccentRow() {
+      const open = customAccentRow.style.display === "none";
+      customAccentRow.style.display   = open ? "flex" : "none";
+      customAccentError.style.display = "none";
+      if (open) {
+        customAccentInput.value = customAccentColor ?? "";
+        customAccentInput.classList.toggle("valid", isValidHex6(customAccentInput.value));
+        setTimeout(() => customAccentInput.focus(), 40);
+      }
+    }
+
+    accentCustomBtn.addEventListener("click", toggleCustomAccentRow);
+
+    customAccentInput.addEventListener("input", () => {
+      const v = customAccentInput.value.replace(/[^0-9a-fA-F]/g,"");
+      customAccentInput.value = v;
+      customAccentInput.classList.toggle("valid", isValidHex6(v));
+      customAccentError.style.display = "none";
+    });
+
+    customAccentApply.addEventListener("click", () => {
+      const v = customAccentInput.value.trim();
+      if (!isValidHex6(v)) {
+        customAccentError.textContent   = copy[language].customAccentError;
+        customAccentError.style.display = "block";
+        return;
+      }
+      applyCustomAccent(v);
+    });
+
+    customAccentInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") customAccentApply.click();
+    });
+
+    // ── Blur / Opacity ────────────────────────────────────────
+    function applyCardBlur(v) {
+      cardBlur = v;
+      document.documentElement.style.setProperty("--card-blur", `${v}px`);
+      blurValue.textContent = `${v}px`;
+      blurRange.value = String(v);
+    }
+
+    function applyCardOpacity(v) {
+      cardOpacity = v;
+      document.documentElement.style.setProperty("--card-opacity", (v / 100).toFixed(2));
+      opacityValue.textContent = `${v}%`;
+      opacityRange.value = String(v);
+    }
+
+    // ── Background ────────────────────────────────────────────
+    const DEFAULT_BG = "https://images.unsplash.com/photo-1752784153859-4cdd1a474404?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=80&w=3000";
+    const OVERLAY    = "linear-gradient(180deg, rgba(10,12,16,0.12), rgba(10,12,16,0.44))";
+
+    function applyBackground(url) {
+      bgLayer.style.backgroundImage    = `${OVERLAY}, url("${url}")`;
+      bgLayer.style.backgroundSize     = "cover";
+      bgLayer.style.backgroundPosition = "center";
+    }
+
+    function resetBackground() {
+      if (customBgUrl) { URL.revokeObjectURL(customBgUrl); customBgUrl = null; }
+      applyBackground(DEFAULT_BG);
+    }
+
+    // ── Upgrade ───────────────────────────────────────────────
+    function getUpgradeCost() {
+      return Math.floor(baseUpgradeCost * Math.pow(1.6, productionLevel));
+    }
+
+    function buyUpgrade() {
+      const cost = getUpgradeCost();
+      if (Math.floor(time) < cost) return;
+      time -= cost;
+      productionLevel += 1;
+      productionRate  += 1;
+      render();
+    }
+
+    // ── Tab switching ─────────────────────────────────────────
+    function switchTab(tab) {
+      const isMain = tab === "main";
+      tabMain.classList.toggle("active",    isMain);
+      tabUpgrade.classList.toggle("active", !isMain);
+      panelMain.classList.toggle("active",    isMain);
+      panelUpgrade.classList.toggle("active", !isMain);
+    }
+
+    // ── Events ────────────────────────────────────────────────
+    settingsToggle.addEventListener("click", () => setSettingsOpen(!settingsRoot.classList.contains("open")));
+    settingsClose.addEventListener("click",  () => setSettingsOpen(false));
+
+    langKo.addEventListener("click",     () => applyLanguage("ko"));
+    langEn.addEventListener("click",     () => applyLanguage("en"));
+    themeDark.addEventListener("click",  () => applyTheme("dark"));
+    themeLight.addEventListener("click", () => applyTheme("light"));
+
+    accentBlue.addEventListener("click",   () => applyAccent("blue"));
+    accentGreen.addEventListener("click",  () => applyAccent("green"));
+    accentYellow.addEventListener("click", () => applyAccent("yellow"));
+    accentPurple.addEventListener("click", () => applyAccent("purple"));
+    accentRed.addEventListener("click",    () => applyAccent("red"));
+
+    blurRange.addEventListener("input",    e => applyCardBlur(Number(e.target.value)));
+    opacityRange.addEventListener("input", e => applyCardOpacity(Number(e.target.value)));
+
+    upgradeButton.addEventListener("click", buyUpgrade);
+
+    tabMain.addEventListener("click",    () => switchTab("main"));
+    tabUpgrade.addEventListener("click", () => switchTab("upgrade"));
+
+    bgUploadBtn.addEventListener("click", () => bgFileInput.click());
+    bgFileInput.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (customBgUrl) URL.revokeObjectURL(customBgUrl);
+      customBgUrl = URL.createObjectURL(file);
+      applyBackground(customBgUrl);
+      bgFileInput.value = "";
+    });
+    bgResetBtn.addEventListener("click", resetBackground);
+
+    autosaveOnBtn.addEventListener("click",  () => applyAutosaveEnabled(true));
+    autosaveOffBtn.addEventListener("click", () => applyAutosaveEnabled(false));
+    autosaveRange.addEventListener("input",  e  => applyAutosaveInterval(Number(e.target.value)));
+
+    document.addEventListener("click", e => {
+      if (!settingsRoot.contains(e.target) && !dangerModal.contains(e.target)) setSettingsOpen(false);
+    });
+
+    // ── Save / Load ───────────────────────────────────────────
+    const SAVE_PREFIX   = "timecollector_slot_";
+    const NUM_SLOTS     = 3;
+    let statusTimer     = null;
+
+    function buildSaveData() {
+      return {
+        time, productionRate, productionLevel,
+        language, cardTheme, accent, cardBlur, cardOpacity,
+        customAccentColor,
+        savedAt: Date.now(),
+      };
+    }
+
+    // ── Autosave ──────────────────────────────────────────────
+    function doAutosave() {
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(buildSaveData()));
+        lastAutosaveAt = Date.now();
+        updateAutosaveHint();
+      } catch(e) { /* storage full or unavailable */ }
+    }
+
+    function updateAutosaveHint() {
+      if (!autosaveEnabled) {
+        autosaveHint.textContent = copy[language].autosaveNever;
+        return;
+      }
+      if (!lastAutosaveAt) {
+        autosaveHint.textContent = copy[language].autosaveNever;
+        return;
+      }
+      const elapsed = Math.round((Date.now() - lastAutosaveAt) / 1000);
+      autosaveHint.textContent = copy[language].autosaveLastFmt(elapsed);
+    }
+
+    function startAutosaveTimer() {
+      if (autosaveTimer) clearInterval(autosaveTimer);
+      if (!autosaveEnabled) return;
+      autosaveTimer = setInterval(doAutosave, autosaveInterval * 1000);
+    }
+
+    function applyAutosaveEnabled(enabled) {
+      autosaveEnabled = enabled;
+      autosaveOnBtn.classList.toggle("active",  autosaveEnabled);
+      autosaveOffBtn.classList.toggle("active", !autosaveEnabled);
+      autosaveIntervalGroup.style.opacity = autosaveEnabled ? "1" : "0.38";
+      autosaveIntervalGroup.style.pointerEvents = autosaveEnabled ? "" : "none";
+      updateAutosaveHint();
+      startAutosaveTimer();
+      saveAutosaveSettings();
+    }
+
+    function applyAutosaveInterval(sec) {
+      autosaveInterval = sec;
+      const t = copy[language];
+      autosaveValue.textContent = `${sec}${t.autosaveSec}`;
+      autosaveRange.value = String(sec);
+      startAutosaveTimer();
+      saveAutosaveSettings();
+    }
+
+    function saveAutosaveSettings() {
+      try {
+        localStorage.setItem(AUTOSAVE_SETTINGS_KEY, JSON.stringify({ autosaveEnabled, autosaveInterval }));
+      } catch(e) {}
+    }
+
+    function loadAutosaveSettings() {
+      try {
+        const raw = localStorage.getItem(AUTOSAVE_SETTINGS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (typeof s.autosaveEnabled  === "boolean") autosaveEnabled  = s.autosaveEnabled;
+        if (typeof s.autosaveInterval === "number")  autosaveInterval = s.autosaveInterval;
+      } catch(e) {}
+    }
+
+    // ── Autosave hint 1초마다 갱신 ────────────────────────────
+    function startHintRefresh() {
+      setInterval(updateAutosaveHint, 1000);
+    }
+
+    // ── 시작 시 자동저장 데이터 불러오기 ─────────────────────
+    function tryLoadAutosave() {
+      try {
+        const raw = localStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return false;
+        const d = JSON.parse(raw);
+        applyLoadData(d);
+        lastAutosaveAt = d.savedAt ?? null;
+        return true;
+      } catch(e) { return false; }
+    }
+
+    function applyLoadData(d) {
+      time            = d.time            ?? 0;
+      productionRate  = d.productionRate  ?? 1;
+      productionLevel = d.productionLevel ?? 0;
+      if (d.customAccentColor) customAccentColor = d.customAccentColor;
+      applyLanguage(d.language   ?? "ko");
+      applyTheme(d.cardTheme     ?? "dark");
+      applyAccent(d.accent       ?? "yellow");
+      applyCardBlur(d.cardBlur   ?? 14);
+      applyCardOpacity(d.cardOpacity ?? 42);
+      render();
+    }
+
+    function getSlotData(slot) {
+      try {
+        const raw = localStorage.getItem(SAVE_PREFIX + slot);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    }
+
+    function formatSlotTime(d) {
+      if (!d) return "—";
+      return Math.floor(d.time).toLocaleString();
+    }
+
+    function showStatus(msg) {
+      saveStatus.textContent = msg;
+      if (statusTimer) clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => { saveStatus.textContent = ""; }, 2200);
+    }
+
+    function renderSaveSlots() {
+      const t = copy[language];
+      saveLoadLabel.textContent = t.saveLoad;
+      autosaveLabel.textContent = t.autosave;
+      autosaveIntervalLabel.textContent = t.autosaveInterval;
+      autosaveOnBtn.textContent  = t.autosaveOn;
+      autosaveOffBtn.textContent = t.autosaveOff;
+      autosaveValue.textContent  = `${autosaveInterval}${t.autosaveSec}`;
+      updateAutosaveHint();
+      dangerDesc.textContent      = t.dangerDesc;
+      gameResetBtn.textContent    = t.dangerBtn;
+      saveSlotGrid.innerHTML = "";
+      for (let i = 1; i <= NUM_SLOTS; i++) {
+        const d = getSlotData(i);
+        const slot = document.createElement("div");
+        slot.className = "save-slot";
+        slot.innerHTML = `
+          <span class="save-slot-label">${t.saveInfo} ${i}</span>
+          <span class="save-slot-time">${formatSlotTime(d)}</span>
+          <div class="save-slot-btns">
+            <button class="is-save" data-slot="${i}" data-action="save">${t.saveBtn}</button>
+            <button data-slot="${i}" data-action="load" ${d ? "" : "disabled"}>${t.loadBtn}</button>
+          </div>`;
+        saveSlotGrid.appendChild(slot);
+      }
+      gameResetBtn.textContent = t.resetBtn;
+    }
+
+    saveSlotGrid.addEventListener("click", e => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const slot   = btn.dataset.slot;
+      const action = btn.dataset.action;
+      const t      = copy[language];
+      if (action === "save") {
+        localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(buildSaveData()));
+        showStatus(t.saveOk);
+        renderSaveSlots();
+      } else if (action === "load") {
+        const d = getSlotData(slot);
+        if (d) { applyLoadData(d); showStatus(t.loadOk); renderSaveSlots(); }
+        else    { showStatus(t.loadNone); }
+      }
+    });
+
+    // ── Danger zone modal ─────────────────────────────────────
+    function openDangerModal() {
+      const t = copy[language];
+      dangerModalTitle.textContent   = t.dangerBtn;
+      dangerModalDesc.textContent    = t.dangerDesc;
+      dangerModalHint.textContent    = t.dangerPrompt + ":";
+      dangerModalPhrase.textContent  = t.dangerPhrase;
+      dangerModalInput.placeholder   = t.dangerPhrase;
+      dangerModalCancel.textContent  = t.dangerCancel;
+      dangerModalConfirm.textContent = t.dangerConfirm;
+      dangerModalInput.value         = "";
+      dangerModalError.textContent   = "";
+      dangerModalConfirm.disabled    = true;
+      dangerModalInput.classList.remove("match");
+      dangerModal.style.display      = "grid";
+      setTimeout(() => dangerModalInput.focus(), 60);
+    }
+
+    function closeDangerModal() {
+      dangerModal.style.display = "none";
+    }
+
+    gameResetBtn.addEventListener("click", openDangerModal);
+
+    dangerModalCancel.addEventListener("click", closeDangerModal);
+
+    dangerModalInput.addEventListener("input", () => {
+      const t       = copy[language];
+      const val     = dangerModalInput.value;
+      const match   = val === t.dangerPhrase;
+      dangerModalConfirm.disabled = !match;
+      dangerModalInput.classList.toggle("match", match);
+      dangerModalError.textContent = "";
+    });
+
+    dangerModalConfirm.addEventListener("click", () => {
+      const t = copy[language];
+      if (dangerModalInput.value !== t.dangerPhrase) {
+        dangerModalError.textContent = t.dangerWrong;
+        return;
+      }
+      // 실제 초기화
+      time = 0; productionRate = 1; productionLevel = 0;
+      try { localStorage.removeItem(AUTOSAVE_KEY); } catch(e) {}
+      lastAutosaveAt = null;
+      render();
+      updateAutosaveHint();
+      renderSaveSlots();
+      closeDangerModal();
+      showStatus("✓");
+    });
+
+    dangerModal.addEventListener("click", e => {
+      if (e.target === dangerModal) closeDangerModal();
+    });
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        if (dangerModal.style.display !== "none") { closeDangerModal(); return; }
+        setSettingsOpen(false);
+      }
+    });
+
+    // ── Bootstrap ─────────────────────────────────────────────
+    loadAutosaveSettings();           // 자동저장 설정 먼저 복원
+    resetBackground();
+    if (!tryLoadAutosave()) {         // 자동저장 데이터 복원 시도
+      applyLanguage("ko");
+      applyTheme("dark");
+      applyAccent("yellow");
+      applyCardBlur(14);
+      applyCardOpacity(42);
+    }
+    applyAutosaveEnabled(autosaveEnabled);
+    applyAutosaveInterval(autosaveInterval);
+    renderSaveSlots();
+    render();
+    startHintRefresh();
+
+    setInterval(() => { time += productionRate; render(); }, 1000);
+  </script>
+</body>
+</html>
